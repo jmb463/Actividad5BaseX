@@ -8,10 +8,7 @@ package actividad5basex;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Scanner;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 import org.basex.BaseXServer;
-import org.basex.core.*;
 import org.basex.core.cmd.*;
 import org.basex.server.ClientQuery;
 import org.basex.server.ClientSession;
@@ -22,7 +19,7 @@ import org.basex.server.ClientSession;
  */
 
 
-public class GestorDB {
+public final class GestorDB {
     
     private static BaseXServer server;
     private static ClientSession session;
@@ -38,9 +35,11 @@ public class GestorDB {
             session = new ClientSession("localhost", 1984, "admin", "admin");
             
             // Crear base de datos
-            System.out.println("\n* Create a database.");
+            System.out.println("\n* Creando la base de datos.");
 
             session.execute(new CreateDB("Empresa", "src/datos/empresa.xml"));
+            
+            recuperarDpt();
            
         } 
         catch (IOException ex) {
@@ -51,6 +50,7 @@ public class GestorDB {
     public void cerrarDatabase(){
         try {
             //Parar el servidor
+            session.close();
             server.stop();
             System.out.println(" \n La base de datos ha sido cerrada");
             
@@ -92,34 +92,47 @@ public class GestorDB {
         return dept;
     }
     
-    public Dept getDptConEmp(String codigoDpt){
+    public Dept getDptConEmp(String codigoDpt) throws IOException{
+        Dept dept = new Dept(codigoDpt,null,null);
         int contador = 0;
-        Dept dept = this.getDptSinEmp(codigoDpt);
-        String nombre = dept.getNombreDpt();
-        String localidad = dept.getLocalidad();
-       
-        for(int i = 0; i<listaEmp.size();i++){
-            String codigo = this.listaEmp.get(i).getCodigoDpt(); 
-            if(codigo.equalsIgnoreCase(codigoDpt)){
-                System.out.println("---------Empleado " + i + "----------");
-                System.out.println("Código: " + this.listaEmp.get(i).getCodigoEmp());
-                System.out.println("Apellido: " + this.listaEmp.get(i).getApellido());
-                System.out.println("Codigo departamento: " + this.listaEmp.get(i).getCodigoDpt());
-                System.out.println("Fecha de alta: " + this.listaEmp.get(i).getFechaAlta());
-                System.out.println("Oficio: " + this.listaEmp.get(i).getOficio());
-                System.out.println("Salario: " + this.listaEmp.get(i).getSalario());
-                System.out.println("Comisión: " + this.listaEmp.get(i).getComision());
-                System.out.println("Codigo jefe: " + this.listaEmp.get(i).getJefe());
-                System.out.print("");
-                contador++;
-            }
-        }    
-        if(contador==0){
-            System.out.println("No existe ningún empleado en el departamento especificado");
+        ClientQuery query = session.query("//dept/@codi='"+codigoDpt+"'");
+        String q1 = query.execute();
+        getDptSinEmp(codigoDpt);
+        String nombre, localidad;
+        
+    
+        if(q1.equalsIgnoreCase("true")){   
+            for(int i = 0; i<listaEmp.size();i++){
+                String codigo = this.listaEmp.get(i).getCodigoDpt(); 
+                if(codigo.equalsIgnoreCase(codigoDpt)){
+                    nombre = dept.getNombreDpt();
+                    localidad = dept.getLocalidad();
+                    System.out.println("---------Empleado----------");
+                    System.out.println("Código: " + this.listaEmp.get(i).getCodigoEmp());
+                    System.out.println("Apellido: " + this.listaEmp.get(i).getApellido());
+                    System.out.println("Codigo departamento: " + this.listaEmp.get(i).getCodigoDpt());
+                    System.out.println("Fecha de alta: " + this.listaEmp.get(i).getFechaAlta());
+                    System.out.println("Oficio: " + this.listaEmp.get(i).getOficio());
+                    System.out.println("Salario: " + this.listaEmp.get(i).getSalario());
+                    System.out.println("Comisión: " + this.listaEmp.get(i).getComision());
+                    System.out.println("Codigo jefe: " + this.listaEmp.get(i).getJefe());
+                    System.out.print("");
+                    contador++;
+                    
+                    dept = new Dept(codigoDpt, nombre, localidad, listaEmp);
+                    
+                }
+            }    
+        }
+        else{
+            System.out.println("\n El departamento no existe");
+            
         }
         
-        dept = new Dept(codigoDpt, nombre, localidad, listaEmp);
-       
+        if(contador==0){
+            System.out.println("\n No hay ningún empleado en ese departamento");
+        }
+                    
         return dept;
     }
     
@@ -130,7 +143,9 @@ public class GestorDB {
             String q1 = qCodigo.execute(); 
                   
             if(q1.equalsIgnoreCase("false")){
-                ClientQuery insert = session.query("insert node <dept codi='"+codigoDpt+"'><nom>"+nombreDpt+"</nom><localitat>"+localidad+"</localitat></dept>after //dept[@codi='d40']");
+                ClientQuery insert = session.query("insert node <dept codi='"+codigoDpt+"'>"
+                        + "<nom>"+nombreDpt+"</nom><localitat>"+localidad+"</localitat>"
+                                + "</dept>after //dept[@codi='d40']");
                 insert.execute();
                 
                 Dept dpt = new Dept(codigoDpt,nombreDpt,localidad);
@@ -169,28 +184,23 @@ public class GestorDB {
                 
                 if(comprobacion.equalsIgnoreCase("true")){
                     if(codigoDpt.equalsIgnoreCase(this.listaEmp.get(i).getCodigoDpt())){
-                        if(comprobacion2.equalsIgnoreCase("false")){
-                            if(qJefe.equalsIgnoreCase("null")){
-                                ClientQuery insert = session.query("insert node <emp codi='"+qCodigo+"' dept='"+codigoDpt+"'><cognom>"+qApellido+"</cognom><ofici>"+qOficio+"</ofici>"
-                                    + "<dataAlta>"+qFechaAlta+"</dataAlta><salari>"+qSalario+"</salari><comissio>"+qComision+"</comissio></emp> after //emp[@codi='e7934']");
-                                insert.execute();
-                            }
-                            else{
-                                ClientQuery insert = session.query("insert node <emp codi='"+qCodigo+"' dept='"+codigoDpt+"' cap='"+qJefe+"'><cognom>"+qApellido+"</cognom><ofici>"+qOficio+"</ofici>"
-                                    + "<dataAlta>"+qFechaAlta+"</dataAlta><salari>"+qSalario+"</salari><comissio>"+qComision+"</comissio></emp> after //emp[@codi='e7934']");
-                                insert.execute();
-                            }
-                            System.out.println("Se realizó con éxito el insert del departamento "+codigoDpt+" con empleados");
+                        if(qJefe.equalsIgnoreCase("null")){
+                            ClientQuery insert = session.query("insert node <emp codi='"+qCodigo+"' dept='"+codigoDpt+"'><cognom>"+qApellido+"</cognom><ofici>"+qOficio+"</ofici>"
+                                + "<dataAlta>"+qFechaAlta+"</dataAlta><salari>"+qSalario+"</salari><comissio>"+qComision+"</comissio></emp> after //emp[@codi='e7934']");
+                            insert.execute();
+                                
+                        }
+                        
+                        else{ 
                             
+                            ClientQuery insert = session.query("insert node <emp codi='"+qCodigo+"' dept='"+codigoDpt+"' cap='"+qJefe+"'><cognom>"+qApellido+"</cognom><ofici>"+qOficio+"</ofici>"       
+                                + "<dataAlta>"+qFechaAlta+"</dataAlta><salari>"+qSalario+"</salari><comissio>"+qComision+"</comissio></emp> after //emp[@codi='e7934']");
+                            insert.execute();
                         }
-                        else{
-                            System.out.println("El empleado ya esta creado");
-                        }
+                            
+                        System.out.println("Se realizó con éxito el insert del departamento "+codigoDpt+" con empleados");
                     }
-                }
-   
-                
-                
+                }  
             } catch (IOException ex) {
                 System.out.println("No se pudo realizar con éxito el insert con empleados" + ex.getMessage());
             }
@@ -226,7 +236,7 @@ public class GestorDB {
             
         }
         catch(Exception ex){
-            System.out.println("No se pudo recuperar el array de empleados");
+            System.out.println("No se pudo recuperar el array de empleados" + ex.getMessage());
         }
         return null;
         
@@ -245,7 +255,7 @@ public class GestorDB {
         }
     }
     
-    public ArrayList<Emp> deleteDpt(String codigoDpt, Emp empleados[]){
+    public void deleteDpt(String codigoDpt, Emp empleados[]){
         String qCodigo,qApellido,qFechaAlta,qOficio,qJefe;
         int qSalario,qComision;
         try{
@@ -293,7 +303,7 @@ public class GestorDB {
                             ClientQuery reubicar = session.query("replace node //emp[@codi='"+this.listaEmp.get(i).getCodigoEmp()+"'] with <emp codi='"+qCodigo+"' dept='"+decision+"' cap='"+qJefe+"'><cognom>"+qApellido+"</cognom><ofici>"+qOficio+"</ofici>"
                                     + "<dataAlta>"+qFechaAlta+"</dataAlta><salari>"+Salario+"</salari><comissio>"+Comision+"</comissio></emp>");
                             reubicar.execute();
-                            this.listaEmp.get(i).setCodigoEmp(decision);
+                            this.listaEmp.get(i).setCodigoDpt(decision);
                             System.out.println(this.listaEmp.get(i).getCodigoEmp());
                         
                             System.out.println("Los empleados han sido reubicados al departamento: "+decision);
@@ -310,14 +320,11 @@ public class GestorDB {
             }
         } 
         catch (IOException ex) {
-            System.out.println("El delete no se pudo realizar correctamente");
-        }
-        
-        return listaEmp;
-        
+            System.out.println("El delete no se pudo realizar correctamente" + ex.getMessage());
+        }            
     }
     
-    public ArrayList<Emp> replaceDpt(Dept newDept, Emp empleados[]){
+    public void replaceDpt(Dept newDept, Emp empleados[]){
         try {
             //REPLACE node /n with <a/> (Ejemplo)
             Scanner entrada = new Scanner(System.in);
@@ -335,6 +342,9 @@ public class GestorDB {
             
             if(comprobacion.equalsIgnoreCase("true")){
                 ClientQuery replace = session.query("replace node //dept[@codi='"+eleccion+"'] with <dept codi='"+qCodigo+"'><nom>"+qNombre+"</nom><localitat>"+qLocalidad+"</localitat></dept>");
+                for(int i = 0; i<listaDpt.size();i++){
+                    this.listaDpt.get(i).setCodigoDpt(newDept.getCodigoDpt());
+                }
                 replace.execute();
                 System.out.println("Departamentos cambiados");
                     
@@ -347,12 +357,12 @@ public class GestorDB {
                     String qComision =  String.valueOf(this.listaEmp.get(i).getComision());
                     String qJefe = this.listaEmp.get(i).getJefe();
                     if(eleccion.equalsIgnoreCase(this.listaEmp.get(i).getCodigoDpt())){
-                        System.out.println(this.listaEmp.get(i).getApellido() + this.listaEmp.get(i).getCodigoDpt());
-                        ClientQuery reubicar = session.query("replace node //emp[@codi='"+eleccion+"'] with <emp codi='"+qCodigoEmp+"' dept='"+qCodigo+"' cap='"+qJefe+"'><cognom>"+qApellido+"</cognom><ofici>"+qOficio+"</ofici>"
+   
+                        ClientQuery reubicar = session.query("replace node //emp[@codi='"+qCodigoEmp+"'] with <emp codi='"+qCodigoEmp+"' dept='"+qCodigo+"' cap='"+qJefe+"'><cognom>"+qApellido+"</cognom><ofici>"+qOficio+"</ofici>"
                                     + "<dataAlta>"+qFechaAlta+"</dataAlta><salari>"+qSalario+"</salari><comissio>"+qComision+"</comissio></emp>");
                         reubicar.execute();
-                        this.listaEmp.get(i).setCodigoEmp(qCodigo);
-                        System.out.println(this.listaEmp.get(i).getApellido() + this.listaEmp.get(i).getCodigoDpt());
+                        this.listaEmp.get(i).setCodigoDpt(qCodigo);
+                       
                         
                         System.out.println("Los empleados han sido reubicados al departamento: "+eleccion);
                     }
@@ -365,6 +375,5 @@ public class GestorDB {
         catch (IOException ex) {
             System.out.println("No se pudo cambiar el departamento" + ex.getMessage());
         }
-        return listaEmp;
     }
 }
